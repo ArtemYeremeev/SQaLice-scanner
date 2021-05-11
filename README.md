@@ -1,0 +1,2 @@
+# SQaLice-scanner
+ SQaLice
