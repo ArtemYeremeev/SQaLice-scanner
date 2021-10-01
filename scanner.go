@@ -11,6 +11,7 @@ import (
 
 // field describes field info of target struct field
 type field struct {
+	name       string
 	index      []int
 	needBuffer bool
 }
@@ -47,17 +48,17 @@ func Scan(dest interface{}, rows *sql.Rows, tagName string) error {
 	bufIndexes := make(map[int][]int, len(cols)) // Column numbers
 
 	for i, name := range cols {
-		field, ok := fieldInfo[strings.ToLower(name)]
 		var v interface{}
+		field, ok := fieldInfo[strings.ToLower(name)]
 		if !ok {
 			v = &sql.RawBytes{}
 		}
 		if field.needBuffer {
-			var buf json.RawMessage
-			v = &buf
+			v = &json.RawMessage{}
 			bufIndexes[i] = field.index
 		} else {
-			v = elem.FieldByIndex(field.index).Addr().Interface()
+			v = elem.FieldByName(field.name).Addr().Interface()
+			fmt.Println(&v)
 		}
 		values = append(values, v)
 	}
@@ -93,10 +94,16 @@ func getModelInfo(t reflect.Type, tagName string) structFieldsMap {
 	}
 
 	finfo = make(structFieldsMap)
-	n := t.NumField()
-	for i := 0; i < n; i++ {
+	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		tag := f.Tag.Get(tagName)
+		// Handle embedded structs
+		if f.Anonymous && f.Type.Kind() == reflect.Struct {
+			for k, v := range getModelInfo(f.Type, tagName) {
+				finfo[k] = v
+			}
+			continue
+		}
 		if tag == "" {
 			continue
 		}
@@ -107,19 +114,11 @@ func getModelInfo(t reflect.Type, tagName string) structFieldsMap {
 
 		// Handle slice
 		if f.Type.Kind() == reflect.Slice {
-			finfo[tag] = field{[]int{i}, true}
+			finfo[tag] = field{f.Name, []int{i}, true}
 			continue
 		}
 
-		// Handle embedded structs
-		if f.Anonymous && f.Type.Kind() == reflect.Struct {
-			for k, v := range getModelInfo(f.Type, tagName) {
-				finfo[k] = v
-			}
-			continue
-		}
-
-		finfo[tag] = field{[]int{i}, false}
+		finfo[tag] = field{f.Name, []int{i}, false}
 	}
 
 	finfoLock.Lock()
