@@ -58,7 +58,6 @@ func Scan(dest interface{}, rows *sql.Rows, tagName string) error {
 			bufIndexes[i] = field.index
 		} else {
 			v = elem.FieldByName(field.name).Addr().Interface()
-			fmt.Println(&v)
 		}
 		values = append(values, v)
 	}
